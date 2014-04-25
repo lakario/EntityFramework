@@ -1,6 +1,7 @@
 // Copyright (c) Microsoft Open Technologies, Inc. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using JetBrains.Annotations;
@@ -10,8 +11,82 @@ using Microsoft.Data.Entity.Utilities;
 
 namespace Microsoft.Data.Entity.Migrations
 {
+    // TODO: Add base abstraction if we want to support languages other than CSharp.
     public class CSharpModelCodeGenerator
     {
+        public virtual string CodeFileExtension
+        {
+            get { return ".cs"; }
+        }
+
+        public virtual void GenerateClass(
+            [NotNull] string className,
+            [NotNull] string @namespace,
+            [NotNull] IModel model, 
+            [NotNull] IndentedStringBuilder stringBuilder)
+        {
+            Check.NotEmpty(className, "className");
+            Check.NotEmpty(@namespace, "namespace");
+            Check.NotNull(model, "model");
+            Check.NotNull(stringBuilder, "stringBuilder");
+
+            foreach (var ns in GetNamespaces(model))
+            {
+                stringBuilder
+                    .Append("using ")
+                    .Append(ns)
+                    .AppendLine(";");
+            }
+
+            stringBuilder
+                .AppendLine()
+                .Append("namespace ")
+                .AppendLine(@namespace)
+                .AppendLine("{");
+
+            using (stringBuilder.Indent())
+            {
+                stringBuilder
+                    .AppendLine()
+                    .Append("public class ")
+                    .Append(className)
+                    .AppendLine(" : IModelSnapshot")
+                    .AppendLine("{");
+
+                using (stringBuilder.Indent())
+                {
+                    stringBuilder
+                        .AppendLine("public IModel GetModel()")
+                        .AppendLine("{");
+
+                    using (stringBuilder.Indent())
+                    {
+                        Generate(model, stringBuilder);
+                    }
+
+                    stringBuilder.Append("}");
+                }
+
+                stringBuilder
+                    .AppendLine()
+                    .Append("}");
+            }
+
+            stringBuilder
+                .AppendLine()
+                .Append("}");
+        }
+
+        protected virtual IReadOnlyList<string> GetNamespaces([NotNull] IModel model)
+        {
+            return
+                new[]
+                    {
+                        "System",
+                        "Microsoft.Data.Entity.Metadata"
+                    };
+        }
+
         public virtual void Generate(
             [NotNull] IModel model, [NotNull] IndentedStringBuilder stringBuilder)
         {

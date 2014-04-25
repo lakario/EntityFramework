@@ -27,6 +27,12 @@ namespace Microsoft.Data.Entity.Migrations
             return stringBuilder.ToString();
         }
 
+        // TODO: Consider adding a base abstraction for CSharp code generators.
+        public virtual string CodeFileExtension
+        {
+            get { return ".cs"; }
+        }
+
         public virtual void GenerateClass(
             [NotNull] string @namespace,
             [NotNull] string className,
@@ -87,7 +93,7 @@ namespace Microsoft.Data.Entity.Migrations
             Check.NotNull(stringBuilder, "stringBuilder");
 
             stringBuilder
-                .Append("public override ")
+                .Append("public override void ")
                 .Append(methodName)
                 .AppendLine("(MigrationBuilder migrationBuilder)")
                 .AppendLine("{");

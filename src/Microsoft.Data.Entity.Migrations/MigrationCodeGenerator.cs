@@ -23,10 +23,10 @@ namespace Microsoft.Data.Entity.Migrations
                 new[]
                     {
                         "System",
-                        "Microsoft.Data.Migrations",
-                        "Microsoft.Data.Migrations.Builders",
-                        "Microsoft.Data.Migrations.Model",
-                        "Microsoft.Data.Relational"
+                        "Microsoft.Data.Entity.Migrations",
+                        "Microsoft.Data.Entity.Migrations.Builders",
+                        "Microsoft.Data.Entity.Migrations.Model",
+                        "Microsoft.Data.Entity.Relational"
                     };
         }
 
