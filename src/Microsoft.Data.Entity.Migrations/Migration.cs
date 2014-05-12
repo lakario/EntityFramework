@@ -41,9 +41,7 @@ namespace Microsoft.Data.Entity.Migrations
             get
             {
                 var builder = new MigrationBuilder();
-
                 Up(builder);
-
                 return builder.Operations;
             }
         }
@@ -53,9 +51,7 @@ namespace Microsoft.Data.Entity.Migrations
             get
             {
                 var builder = new MigrationBuilder();
-
                 Down(builder);
-
                 return builder.Operations;
             }
         }

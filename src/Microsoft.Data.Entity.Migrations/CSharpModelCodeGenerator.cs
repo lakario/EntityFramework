@@ -1,7 +1,6 @@
 // Copyright (c) Microsoft Open Technologies, Inc. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using JetBrains.Annotations;
@@ -20,8 +19,8 @@ namespace Microsoft.Data.Entity.Migrations
         }
 
         public virtual void GenerateClass(
-            [NotNull] string className,
             [NotNull] string @namespace,
+            [NotNull] string className,
             [NotNull] IModel model, 
             [NotNull] IndentedStringBuilder stringBuilder)
         {
@@ -77,12 +76,16 @@ namespace Microsoft.Data.Entity.Migrations
                 .Append("}");
         }
 
-        protected virtual IReadOnlyList<string> GetNamespaces([NotNull] IModel model)
+        public virtual IReadOnlyList<string> GetNamespaces([NotNull] IModel model)
+        {
+            return GetDefaultNamespaces();
+        }
+
+        public virtual IReadOnlyList<string> GetDefaultNamespaces()
         {
             return
                 new[]
                     {
-                        "System",
                         "Microsoft.Data.Entity.Metadata"
                     };
         }

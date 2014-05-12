@@ -9,7 +9,11 @@
   },
   "code": "**\\*.cs;..\\Shared\\*.cs",
   "configurations": {
-    "net45": {},
+    "net45": {
+      "dependencies": {
+        "System.Data": ""
+      }
+    },
     "k10": {
       "dependencies": {
         "Microsoft.CSharp": "4.0.0.0",
@@ -38,6 +42,7 @@
         "System.Diagnostics.Debug": "",
         "System.Dynamic.Runtime": "",
         "System.Globalization": "",
+        "System.IO": "",
         "System.Linq": "",
         "System.Linq.Expressions": "",
         "System.Reflection": "",

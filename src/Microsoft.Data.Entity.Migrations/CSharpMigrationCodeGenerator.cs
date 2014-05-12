@@ -7,6 +7,8 @@ using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
 using JetBrains.Annotations;
+using Microsoft.Data.Entity.Metadata;
+using Microsoft.Data.Entity.Migrations.Infrastructure;
 using Microsoft.Data.Entity.Migrations.Model;
 using Microsoft.Data.Entity.Migrations.Utilities;
 using Microsoft.Data.Entity.Relational.Model;
@@ -16,6 +18,31 @@ namespace Microsoft.Data.Entity.Migrations
 {
     public class CSharpMigrationCodeGenerator : MigrationCodeGenerator
     {
+        private readonly CSharpModelCodeGenerator _modelGenerator;
+
+        public CSharpMigrationCodeGenerator()
+            : this(new CSharpModelCodeGenerator())
+        {
+        }
+
+        public CSharpMigrationCodeGenerator([NotNull] CSharpModelCodeGenerator modelGenerator)
+        {
+            Check.NotNull(modelGenerator, "modelGenerator");
+
+            _modelGenerator = modelGenerator;
+        }
+
+        public virtual CSharpModelCodeGenerator ModelGenerator
+        {
+            get { return _modelGenerator; }
+        }
+
+        // TODO: Consider adding a base abstraction for CSharp code generators.
+        public virtual string CodeFileExtension
+        {
+            get { return ".cs"; }
+        }
+
         public static string Generate<T>([NotNull] T migrationOperation)
             where T : MigrationOperation
         {
@@ -27,22 +54,15 @@ namespace Microsoft.Data.Entity.Migrations
             return stringBuilder.ToString();
         }
 
-        // TODO: Consider adding a base abstraction for CSharp code generators.
-        public virtual string CodeFileExtension
-        {
-            get { return ".cs"; }
-        }
-
         public virtual void GenerateClass(
             [NotNull] string @namespace,
             [NotNull] string className,
-            [NotNull] IReadOnlyList<MigrationOperation> upgradeOperations,
-            [NotNull] IReadOnlyList<MigrationOperation> downgradeOperations,
+            [NotNull] IMigrationMetadata migration,
             [NotNull] IndentedStringBuilder stringBuilder)
         {
-            var operations = upgradeOperations.Concat(downgradeOperations);
+            var operations = migration.UpgradeOperations.Concat(migration.DowngradeOperations);
 
-            foreach (var ns in GetNamespaces(operations))
+            foreach (var ns in GetNamespaces(operations).OrderBy(n => n))
             {
                 stringBuilder
                     .Append("using ")
@@ -59,18 +79,18 @@ namespace Microsoft.Data.Entity.Migrations
             using (stringBuilder.Indent())
             {
                 stringBuilder
-                    .Append("public class ")
+                    .Append("public partial class ")
                     .Append(className)
                     .AppendLine(" : Migration")
                     .AppendLine("{");
 
                 using (stringBuilder.Indent())
                 {
-                    GenerateMethod("Up", upgradeOperations, stringBuilder);
+                    GenerateMigrationMethod("Up", migration.UpgradeOperations, stringBuilder);
 
-                    stringBuilder.AppendLine();
+                    stringBuilder.AppendLine().AppendLine();
 
-                    GenerateMethod("Down", downgradeOperations, stringBuilder);
+                    GenerateMigrationMethod("Down", migration.DowngradeOperations, stringBuilder);
                 }
 
                 stringBuilder
@@ -83,7 +103,75 @@ namespace Microsoft.Data.Entity.Migrations
                 .Append("}");
         }
 
-        protected virtual void GenerateMethod(
+        public virtual void GenerateDesignerClass(
+            [NotNull] string @namespace,
+            [NotNull] string className,
+            [NotNull] IMigrationMetadata migration,
+            [NotNull] IndentedStringBuilder stringBuilder)
+        {
+            foreach (var ns in GetMetadataDefaultNamespaces()
+                .Concat(ModelGenerator.GetNamespaces(migration.TargetModel))
+                .OrderBy(n => n))
+            {
+                stringBuilder
+                    .Append("using ")
+                    .Append(ns)
+                    .AppendLine(";");
+            }
+
+            stringBuilder
+                .AppendLine()
+                .Append("namespace ")
+                .AppendLine(@namespace)
+                .AppendLine("{");            
+
+            using (stringBuilder.Indent())
+            {
+                stringBuilder
+                    .Append("public partial class ")
+                    .Append(className)
+                    .AppendLine(" : IMigrationMetadata")
+                    .AppendLine("{");
+
+                using (stringBuilder.Indent())
+                {
+                    GenerateMigrationProperty(
+                        "string IMigrationMetadata.Name", 
+                        () => stringBuilder
+                            .Append("return ")
+                            .Append(GenerateLiteral(migration.Name))
+                            .Append(";"), 
+                        stringBuilder);
+
+                    stringBuilder.AppendLine().AppendLine();
+
+                    GenerateMigrationProperty(
+                        "string IMigrationMetadata.Timestamp",
+                        () => stringBuilder
+                            .Append("return ")
+                            .Append(GenerateLiteral(migration.Timestamp))
+                            .Append(";"),
+                        stringBuilder);
+
+                    stringBuilder.AppendLine().AppendLine();
+
+                    GenerateMigrationProperty(
+                        "IModel IMigrationMetadata.TargetModel",
+                        () => ModelGenerator.Generate(migration.TargetModel, stringBuilder),
+                        stringBuilder);
+                }
+
+                stringBuilder
+                    .AppendLine()
+                    .Append("}");
+            }
+
+            stringBuilder
+                .AppendLine()
+                .Append("}");            
+        }
+
+        protected virtual void GenerateMigrationMethod(
             [NotNull] string methodName,
             [NotNull] IReadOnlyList<MigrationOperation> migrationOperations,
             [NotNull] IndentedStringBuilder stringBuilder)
@@ -108,6 +196,34 @@ namespace Microsoft.Data.Entity.Migrations
 
                     stringBuilder.AppendLine(";");
                 }
+            }
+
+            stringBuilder.Append("}");
+        }
+
+        protected virtual void GenerateMigrationProperty(
+            [NotNull] string signature,
+            [NotNull] Action generateCode,
+            [NotNull] IndentedStringBuilder stringBuilder)
+        {
+            stringBuilder
+                .AppendLine(signature)
+                .AppendLine("{");
+
+            using (stringBuilder.Indent())
+            {
+                stringBuilder
+                    .AppendLine("get")
+                    .AppendLine("{");
+
+                using (stringBuilder.Indent())
+                {
+                    generateCode();
+                }
+
+                stringBuilder
+                    .AppendLine()
+                    .AppendLine("}");
             }
 
             stringBuilder.Append("}");

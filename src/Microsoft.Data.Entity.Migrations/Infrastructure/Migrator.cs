@@ -1,11 +1,10 @@
-﻿// Copyright (c) Microsoft Open Technologies, Inc. All rights reserved. See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft Open Technologies, Inc. All rights reserved.
+// Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 using JetBrains.Annotations;
-using Microsoft.Data.Entity;
 using Microsoft.Data.Entity.Migrations.Model;
 using Microsoft.Data.Entity.Migrations.Utilities;
 using Microsoft.Data.Entity.Relational;
@@ -17,12 +16,12 @@ namespace Microsoft.Data.Entity.Migrations.Infrastructure
     {
         private readonly DbContext _context;
         private readonly MigratorConfiguration _configuration;
-        private HistoryRepository _historyRepository;
-        private MigrationAssembly _migrationAssembly;
-        private MigrationScaffolder _migrationScaffolder;
-        private ModelDiffer _modelDiffer;
-        private MigrationOperationSqlGenerator _sqlGenerator;
-        private SqlStatementExecutor _sqlExecutor;
+        private readonly HistoryRepository _historyRepository;
+        private readonly MigrationAssembly _migrationAssembly;
+        private readonly MigrationScaffolder _migrationScaffolder;
+        private readonly ModelDiffer _modelDiffer;
+        private readonly MigrationOperationSqlGenerator _sqlGenerator;
+        private readonly SqlStatementExecutor _sqlExecutor;
 
         public Migrator([NotNull] DbContext context, [NotNull] MigratorConfiguration configuration)
         {
@@ -34,7 +33,7 @@ namespace Microsoft.Data.Entity.Migrations.Infrastructure
 
             _historyRepository 
                 = (HistoryRepository)_configuration.ServiceProvider.GetService(typeof(HistoryRepository)) 
-                ?? new HistoryRepository(_context.GetType(), _configuration.ServiceProvider);
+                ?? new HistoryRepository(_context, _configuration.ServiceProvider);
 
             _migrationAssembly 
                 = (MigrationAssembly)_configuration.ServiceProvider.GetService(typeof(MigrationAssembly)) 
@@ -52,13 +51,11 @@ namespace Microsoft.Data.Entity.Migrations.Infrastructure
                 = (ModelDiffer)_configuration.ServiceProvider.GetService(typeof(ModelDiffer)) 
                 ?? new ModelDiffer(new DatabaseBuilder());
 
-            _sqlGenerator 
-                = (MigrationOperationSqlGenerator)_configuration.ServiceProvider.GetService(typeof(MigrationOperationSqlGenerator))
-                ?? new MigrationOperationSqlGenerator();
+            _sqlGenerator
+                = (MigrationOperationSqlGenerator)_configuration.ServiceProvider.GetService(typeof(MigrationOperationSqlGenerator));
 
             _sqlExecutor
-                = (SqlStatementExecutor)_configuration.ServiceProvider.GetService(typeof(SqlStatementExecutor))
-                ?? new SqlStatementExecutor();
+                = (SqlStatementExecutor)_configuration.ServiceProvider.GetService(typeof(SqlStatementExecutor));
         }
 
         public virtual DbContext Context
@@ -133,23 +130,46 @@ namespace Microsoft.Data.Entity.Migrations.Infrastructure
                     });
         }
 
+        public virtual IReadOnlyList<IMigrationMetadata> GetDatabaseMigrations()
+        {
+            return HistoryRepository.Migrations;
+        }
+
+        public virtual IReadOnlyList<IMigrationMetadata> GetLocalMigrations()
+        {
+            return MigrationAssembly.Migrations;
+        }
+
         public virtual IReadOnlyList<IMigrationMetadata> GetPendingMigrations()
         {
-            return MigrationAssembly.Migrations
-                .Except(HistoryRepository.GetMigrations(), (x, y) => x.Name == y.Name)
+            return GetDatabaseMigrations()
+                .Except(GetLocalMigrations(), (x, y) => x.Name == y.Name)
                 .ToArray();
         }
 
-        public virtual void Upgrade()
+        public virtual void UpdateDatabase()
         {
-            foreach (var migration in GetPendingMigrations())
+            var pendingMigrations = GetPendingMigrations();
+
+            if (!pendingMigrations.Any())
+            {
+                return;
+            }
+
+            // TODO: Failure handling.
+
+            foreach (var migration in pendingMigrations)
             {
                 var statements = SqlGenerator.Generate(migration.UpgradeOperations, generateIdempotentSql: true);
                 // TODO: Figure out what needs to be done to avoid the following cast.
-                var connection = ((RelationalConnection)Context.Configuration.Connection).DbConnection;
+                var dbConnection = ((RelationalConnection)Context.Configuration.Connection).DbConnection;
 
-                SqlExecutor.ExecuteNonQuery(connection, statements);
+                SqlExecutor.ExecuteNonQuery(dbConnection, statements);
+
+                HistoryRepository.AddMigration(migration);
             }
+
+            MigrationScaffolder.ScaffoldModel(pendingMigrations.Last().TargetModel);
         }
     }
 }

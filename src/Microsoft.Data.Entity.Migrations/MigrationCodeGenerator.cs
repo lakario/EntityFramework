@@ -14,19 +14,25 @@ namespace Microsoft.Data.Entity.Migrations
 
         protected virtual IReadOnlyList<string> GetNamespaces(IEnumerable<MigrationOperation> operations)
         {
-            return GetDefaultNamespaces(operations);
+            return GetDefaultNamespaces();
         }
 
-        protected virtual IReadOnlyList<string> GetDefaultNamespaces(IEnumerable<MigrationOperation> operations)
+        protected virtual IReadOnlyList<string> GetDefaultNamespaces()
         {
             return
                 new[]
                     {
-                        "System",
                         "Microsoft.Data.Entity.Migrations",
                         "Microsoft.Data.Entity.Migrations.Builders",
-                        "Microsoft.Data.Entity.Migrations.Model",
-                        "Microsoft.Data.Entity.Relational"
+                    };
+        }
+
+        protected virtual IReadOnlyList<string> GetMetadataDefaultNamespaces()
+        {
+            return
+                new[]
+                    {
+                        "Microsoft.Data.Entity.Migrations.Infrastructure"
                     };
         }
 

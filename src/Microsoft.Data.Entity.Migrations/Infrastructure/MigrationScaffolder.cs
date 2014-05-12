@@ -1,4 +1,5 @@
-﻿// Copyright (c) Microsoft Open Technologies, Inc. All rights reserved. See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft Open Technologies, Inc. All rights reserved.
+// Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
 using System.IO;
@@ -15,8 +16,7 @@ namespace Microsoft.Data.Entity.Migrations.Infrastructure
         private readonly string _namespace;
         private readonly string _directory;
         // TODO: Create and use language agnostic abstraction if we plan to support anything other than CSharp.
-        private CSharpMigrationCodeGenerator _migrationGenerator; 
-        private CSharpModelCodeGenerator _modelGenerator;
+        private readonly CSharpMigrationCodeGenerator _migrationGenerator;
 
         public MigrationScaffolder(
             [NotNull] Type contextType,
@@ -30,16 +30,12 @@ namespace Microsoft.Data.Entity.Migrations.Infrastructure
             Check.NotNull(servicesProvider, "servicesProvider");
 
             _contextType = contextType;
-            _directory = directory;
             _namespace = @namespace;
+            _directory = directory;
 
             _migrationGenerator
                 = (CSharpMigrationCodeGenerator)servicesProvider.GetService(typeof(CSharpMigrationCodeGenerator)) 
                 ?? new CSharpMigrationCodeGenerator();
-
-            _modelGenerator 
-                = (CSharpModelCodeGenerator)servicesProvider.GetService(typeof(CSharpModelCodeGenerator))  
-                ?? new CSharpModelCodeGenerator();
         }
 
         public virtual Type ContextType
@@ -62,28 +58,21 @@ namespace Microsoft.Data.Entity.Migrations.Infrastructure
             get { return _migrationGenerator; }
         }
 
-        protected virtual CSharpModelCodeGenerator ModelGenerator
-        {
-            get { return _modelGenerator; }
-        }
-
         public virtual void ScaffoldMigration([NotNull] IMigrationMetadata migration)
         {
             Check.NotNull(migration, "migration");
 
             var stringBuilder = new IndentedStringBuilder();
+            var designerStringBuilder = new IndentedStringBuilder();
             var className = GetClassName(migration);
 
-            MigrationGenerator.GenerateClass(
-                className, 
-                Namespace,
-                migration.UpgradeOperations,
-                migration.DowngradeOperations, 
-                stringBuilder);
+            MigrationGenerator.GenerateClass(Namespace, className, migration, stringBuilder);
+            MigrationGenerator.GenerateDesignerClass(Namespace, className, migration, designerStringBuilder);
 
-            OnMigrationScaffolded(className, stringBuilder.ToString());
+            OnMigrationScaffolded(className, stringBuilder.ToString(), designerStringBuilder.ToString());
         }
 
+        // TODO: Consider splitting model scaffolding to its own class.
         public virtual void ScaffoldModel([NotNull] IModel model)
         {
             Check.NotNull(model, "model");
@@ -91,7 +80,7 @@ namespace Microsoft.Data.Entity.Migrations.Infrastructure
             var stringBuilder = new IndentedStringBuilder();
             var className = GetClassName(model);
 
-            ModelGenerator.GenerateClass(className, Namespace, model, stringBuilder);
+            MigrationGenerator.ModelGenerator.GenerateClass(Namespace, className, model, stringBuilder);
 
             OnModelScaffolded(className, stringBuilder.ToString());
         }
@@ -110,26 +99,37 @@ namespace Microsoft.Data.Entity.Migrations.Infrastructure
             return ContextType.Name + "ModelSnapshot";
         }
 
-        protected virtual void OnMigrationScaffolded(string className, string text)
+        protected virtual void OnMigrationScaffolded(string className, string migration, string metadata)
         {            
             var fileName = className + MigrationGenerator.CodeFileExtension;
-            var filePath = Path.Combine(Directory, fileName);
 
-            using (var writer = new StreamWriter(filePath))
-            {
-                writer.Write(text);
-            }
+            WriteFile(fileName, migration, FileMode.CreateNew);
+
+            var designerFileName = className + ".Designer" + MigrationGenerator.CodeFileExtension;
+
+            WriteFile(designerFileName, metadata, FileMode.Create);
         }
 
-        protected virtual void OnModelScaffolded(string className, string text)
+        protected virtual void OnModelScaffolded(string className, string model)
         {
-            var fileName = className + ModelGenerator.CodeFileExtension;
+            var fileName = className + MigrationGenerator.ModelGenerator.CodeFileExtension;
+
+            WriteFile(fileName, model, FileMode.Create);
+        }
+
+        protected virtual void WriteFile(string fileName, string content, FileMode fileMode)
+        {
+#if NET45
             var filePath = Path.Combine(Directory, fileName);
 
-            using (var writer = new StreamWriter(filePath))
+            using (var stream = new FileStream(filePath, fileMode, FileAccess.Write))
             {
-                writer.Write(text);
-            }
+                using (var writer = new StreamWriter(stream))
+                {
+                    writer.Write(content);
+                }
+            }            
+#endif
         }
     }
 }
